@@ -16,17 +16,20 @@ export default async function handler(req, res) {
     try {
       const query = encodeURIComponent('@' + user.display_name);
       const slackRes = await fetch(
-        `https://slack.com/api/search.messages?query=${query}&count=50&sort=timestamp`,
+        `https://slack.com/api/search.messages?query=${query}&count=100&sort=timestamp`,
         { headers: { 'Authorization': `Bearer ${user.slack_token}` } }
       );
       const slackData = await slackRes.json();
       const messages = slackData.messages?.matches || [];
 
       const { data: archived } = await supabase.from('archived').select('link').eq('user_id', user.id);
+      const { data: deleted } = await supabase.from('deleted_mentions').select('link').eq('user_id', user.id);
+
       const archivedLinks = new Set((archived || []).map(a => a.link));
+      const deletedLinks = new Set((deleted || []).map(d => d.link));
 
       const pending = messages
-        .filter(m => !archivedLinks.has(m.permalink))
+        .filter(m => !archivedLinks.has(m.permalink) && !deletedLinks.has(m.permalink))
         .map(m => ({
           id: m.ts, source: 'slack',
           channel: '#' + (m.channel?.name || 'directo'),
@@ -51,13 +54,26 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { action, item } = req.body;
+    const { action, item, ids } = req.body;
+
     if (action === 'archive') {
       await supabase.from('archived').insert({
         user_id: user.id, source: item.source, channel: item.channel,
         message: item.message, link: item.link,
         mention_date: item.date, archived_at: new Date().toISOString()
       });
+      return res.json({ ok: true });
+    }
+
+    if (action === 'delete') {
+      await supabase.from('deleted_mentions').insert({
+        user_id: user.id, link: item.link, deleted_at: new Date().toISOString()
+      });
+      return res.json({ ok: true });
+    }
+
+    if (action === 'deleteArchived') {
+      await supabase.from('archived').delete().in('id', ids).eq('user_id', user.id);
       return res.json({ ok: true });
     }
   }
