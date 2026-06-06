@@ -5,20 +5,21 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
-async function resolveSlackText(text, token) {
-  const allIds = [...new Set([...text.matchAll(/<@([A-Z0-9]+)(?:\|[^>]*)?>/g)].map(m => m[1]))];
-  const names = {};
-  await Promise.all(allIds.map(async id => {
-    try {
-      const r = await fetch(`https://slack.com/api/users.info?user=${id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const d = await r.json();
-      names[id] = d.user?.display_name || d.user?.real_name || id;
-    } catch { names[id] = id; }
-  }));
+async function getUsersMap(token) {
+  const r = await fetch('https://slack.com/api/users.list?limit=200', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  const d = await r.json();
+  const map = {};
+  (d.members || []).forEach(u => {
+    map[u.id] = u.profile?.display_name || u.profile?.real_name || u.name || u.id;
+  });
+  return map;
+}
+
+function cleanText(text, usersMap) {
   return text
-    .replace(/<@([A-Z0-9]+)(?:\|[^>]*)?>/g, (_, id) => `@${names[id] || id}`)
+    .replace(/<@([A-Z0-9]+)(?:\|[^>]*)?>/g, (_, id) => `@${usersMap[id] || id}`)
     .replace(/<(https?:\/\/[^|>]+)\|([^>]+)>/g, '$2')
     .replace(/<(https?:\/\/[^>]+)>/g, '$1')
     .replace(/:\w+:/g, '')
@@ -36,31 +37,33 @@ export default async function handler(req, res) {
     try {
       const slackId = user.slack_user_id;
       const query = encodeURIComponent('@' + slackId);
-      const slackRes = await fetch(
-        `https://slack.com/api/search.messages?query=${query}&count=100&sort=timestamp`,
-        { headers: { 'Authorization': `Bearer ${user.slack_token}` } }
-      );
-      const slackData = await slackRes.json();
-      const messages = slackData.messages?.matches || [];
+
+      const [slackRes, usersMap] = await Promise.all([
+        fetch(
+          `https://slack.com/api/search.messages?query=${query}&count=100&sort=timestamp`,
+          { headers: { 'Authorization': `Bearer ${user.slack_token}` } }
+        ).then(r => r.json()),
+        getUsersMap(user.slack_token)
+      ]);
+
+      const messages = slackRes.messages?.matches || [];
 
       const { data: archived } = await supabase.from('archived').select('link').eq('user_id', user.id);
       const { data: deleted } = await supabase.from('deleted_mentions').select('link').eq('user_id', user.id);
       const archivedLinks = new Set((archived || []).map(a => a.link));
       const deletedLinks = new Set((deleted || []).map(d => d.link));
 
-      const pending = await Promise.all(
-        messages
-          .filter(m => !archivedLinks.has(m.permalink) && !deletedLinks.has(m.permalink))
-          .map(async m => ({
-            id: m.ts,
-            source: 'slack',
-            channel: '#' + (m.channel?.name || 'directo'),
-            message: await resolveSlackText((m.text || '').substring(0, 500), user.slack_token),
-            link: m.permalink,
-            date: new Date(parseFloat(m.ts) * 1000).toISOString(),
-            days: Math.floor((Date.now() - parseFloat(m.ts) * 1000) / 86400000)
-          }))
-      );
+      const pending = messages
+        .filter(m => !archivedLinks.has(m.permalink) && !deletedLinks.has(m.permalink))
+        .map(m => ({
+          id: m.ts,
+          source: 'slack',
+          channel: '#' + (m.channel?.name || 'directo'),
+          message: cleanText((m.text || '').substring(0, 500), usersMap),
+          link: m.permalink,
+          date: new Date(parseFloat(m.ts) * 1000).toISOString(),
+          days: Math.floor((Date.now() - parseFloat(m.ts) * 1000) / 86400000)
+        }));
 
       const { data: archivedItems } = await supabase
         .from('archived').select('*').eq('user_id', user.id)
