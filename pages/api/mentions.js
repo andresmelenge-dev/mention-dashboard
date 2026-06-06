@@ -47,7 +47,7 @@ export default async function handler(req, res) {
       ]);
 
       const messages = slackRes.messages?.matches || [];
-
+console.log('SLACK RESPONSE:', JSON.stringify(slackRes).substring(0, 500));
       const { data: archived } = await supabase.from('archived').select('link').eq('user_id', user.id);
       const { data: deleted } = await supabase.from('deleted_mentions').select('link').eq('user_id', user.id);
       const archivedLinks = new Set((archived || []).map(a => a.link));
