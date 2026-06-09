@@ -60,6 +60,10 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [selectedArchived, setSelectedArchived] = useState([]);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [showConfig, setShowConfig] = useState(false);
+  const [clickupToken, setClickupToken] = useState('');
+  const [savingClickup, setSavingClickup] = useState(false);
+  const [clickupMsg, setClickupMsg] = useState('');
 
   const fetchData = useCallback(async () => {
     try {
@@ -111,6 +115,29 @@ export default function Dashboard() {
     setSelectedArchived(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
+  const handleSaveClickup = async () => {
+    if (!clickupToken.startsWith('pk_')) {
+      setClickupMsg('El token debe empezar con pk_');
+      return;
+    }
+    setSavingClickup(true);
+    setClickupMsg('');
+    const res = await fetch('/api/auth/clickup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: clickupToken })
+    });
+    const d = await res.json();
+    if (d.ok) {
+      setClickupMsg('✅ ClickUp conectado correctamente');
+      setClickupToken('');
+      fetchData();
+    } else {
+      setClickupMsg('❌ Token inválido. Verifica que sea correcto.');
+    }
+    setSavingClickup(false);
+  };
+
   if (loading) return (
     <div style={{ minHeight: '100vh', background: COLORS.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ color: COLORS.muted, fontSize: 18 }}>Cargando menciones...</div>
@@ -127,12 +154,10 @@ export default function Dashboard() {
   archived.forEach(m => { const c = m.channel || 'directo'; canalCount[c] = canalCount[c] || { pend: 0, arch: 0 }; canalCount[c].arch++; });
   const topCanales = Object.entries(canalCount).map(([nombre, v]) => ({ nombre, ...v, total: v.pend + v.arch })).sort((a, b) => b.total - a.total).slice(0, 5);
 
-  // Filtrar pendientes
   const filteredPending = pending
     .filter(m => sourceTab === 'all' || m.source === sourceTab)
     .filter(m => search === '' || m.message?.toLowerCase().includes(search.toLowerCase()) || m.channel?.toLowerCase().includes(search.toLowerCase()));
 
-  // Filtrar archivados
   const filteredArchived = archived
     .filter(m => search === '' || m.message?.toLowerCase().includes(search.toLowerCase()) || m.channel?.toLowerCase().includes(search.toLowerCase()));
 
@@ -151,11 +176,37 @@ export default function Dashboard() {
             <div style={{ color: COLORS.muted, fontSize: 12 }}>{data?.user?.name && `👤 ${data.user.name}`}</div>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {lastUpdate && <span style={{ color: COLORS.muted, fontSize: 12 }}>Actualizado: {lastUpdate.toLocaleTimeString('es-CO')}</span>}
+          <button onClick={() => setShowConfig(!showConfig)} style={{ background: COLORS.card, color: COLORS.muted, border: `1px solid ${COLORS.border}`, padding: '8px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>⚙️ Config</button>
           <button onClick={fetchData} style={{ background: COLORS.accent, color: '#0f0f1a', border: 'none', padding: '8px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', fontSize: 13 }}>🔄 Actualizar</button>
         </div>
       </div>
+
+      {/* Panel Config ClickUp */}
+      {showConfig && (
+        <div style={{ background: '#1a1a2e', borderBottom: `1px solid ${COLORS.border}`, padding: '20px 24px' }}>
+          <div style={{ maxWidth: 600 }}>
+            <div style={{ fontWeight: 'bold', marginBottom: 12, color: COLORS.purple }}>⚙️ Conectar ClickUp</div>
+            <p style={{ color: COLORS.muted, fontSize: 13, marginBottom: 12 }}>
+              Ve a <strong style={{ color: COLORS.text }}>app.clickup.com</strong> → tu avatar → Settings → Apps → copia tu API Token
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="password"
+                value={clickupToken}
+                onChange={e => setClickupToken(e.target.value)}
+                placeholder="pk_..."
+                style={{ flex: 1, padding: '10px 12px', background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text, fontSize: 13, outline: 'none' }}
+              />
+              <button onClick={handleSaveClickup} disabled={savingClickup} style={{ background: COLORS.purple, color: '#0f0f1a', border: 'none', padding: '10px 20px', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', fontSize: 13 }}>
+                {savingClickup ? 'Guardando...' : 'Conectar'}
+              </button>
+            </div>
+            {clickupMsg && <p style={{ color: clickupMsg.includes('✅') ? COLORS.green : COLORS.red, fontSize: 13, marginTop: 8 }}>{clickupMsg}</p>}
+          </div>
+        </div>
+      )}
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 16px' }}>
 
@@ -169,15 +220,12 @@ export default function Dashboard() {
 
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 300 }}>
-
-            {/* Tabs vista */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               {[{ key: 'pending', label: `⏳ Pendientes (${pending.length})` }, { key: 'archived', label: `📦 Archivados (${archived.length})` }].map(t => (
                 <button key={t.key} onClick={() => { setView(t.key); setSearch(''); setSelectedArchived([]); }} style={{ background: view === t.key ? COLORS.accent : COLORS.card, color: view === t.key ? '#0f0f1a' : COLORS.muted, border: 'none', padding: '8px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', fontSize: 13 }}>{t.label}</button>
               ))}
             </div>
 
-            {/* Tabs fuente (solo en pendientes) */}
             {view === 'pending' && (
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 {[
@@ -190,20 +238,12 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Búsqueda */}
             <div style={{ marginBottom: 16, position: 'relative' }}>
               <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: COLORS.muted, fontSize: 14 }}>🔍</span>
-              <input
-                type="text"
-                placeholder="Buscar por canal, mensaje o palabra clave..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px 10px 36px', background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-              />
+              <input type="text" placeholder="Buscar por canal, mensaje o palabra clave..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%', padding: '10px 12px 10px 36px', background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
               {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: COLORS.muted, cursor: 'pointer', fontSize: 16 }}>✕</button>}
             </div>
 
-            {/* Lista pendientes */}
             {view === 'pending' && (
               filteredPending.length === 0 ? (
                 <div style={{ background: COLORS.card, borderRadius: 12, padding: 40, textAlign: 'center' }}>
@@ -215,7 +255,6 @@ export default function Dashboard() {
               )
             )}
 
-            {/* Lista archivados */}
             {view === 'archived' && (
               <>
                 {selectedArchived.length > 0 && (
@@ -250,7 +289,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Panel top canales */}
           <div style={{ width: 260, flexShrink: 0 }}>
             <div style={{ background: COLORS.card, borderRadius: 12, padding: 16 }}>
               <div style={{ color: COLORS.muted, fontSize: 12, fontWeight: 'bold', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>🏆 Top Canales</div>
