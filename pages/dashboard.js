@@ -212,4 +212,118 @@ export default function Dashboard() {
                 value={clickupToken}
                 onChange={e => setClickupToken(e.target.value)}
                 placeholder="pk_..."
-                style={{ flex: 1, padding: '10px 12px', background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: 8, color:
+                style={{ flex: 1, padding: '10px 12px', background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text, fontSize: 13, outline: 'none' }}
+              />
+              <button onClick={handleSaveClickup} disabled={savingClickup} style={{ background: COLORS.purple, color: '#0f0f1a', border: 'none', padding: '10px 20px', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', fontSize: 13 }}>
+                {savingClickup ? 'Guardando...' : 'Conectar'}
+              </button>
+            </div>
+            {clickupMsg && <p style={{ color: clickupMsg.includes('✅') ? COLORS.green : COLORS.red, fontSize: 13, marginTop: 8 }}>{clickupMsg}</p>}
+          </div>
+        </div>
+      )}
+
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 16px' }}>
+
+        {/* Métricas */}
+        <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+          <MetricCard label="Pendientes" value={pending.length} color={COLORS.accent} bg="#0d1525" />
+          <MetricCard label="Gestionadas" value={archived.length} color={COLORS.green} bg="#0a1f14" />
+          <MetricCard label="Urgentes" value={urgentes.length} color={urgentes.length > 0 ? COLORS.red : COLORS.green} bg={urgentes.length > 0 ? "#1f0505" : "#0a1f14"} />
+          <MetricCard label="Resueltas 7D" value={resueltos7d.length} color="#44cc44" bg="#0a1f0a" />
+        </div>
+
+        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 300 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+              {[{ key: 'pending', label: `⏳ Pendientes (${pending.length})` }, { key: 'archived', label: `📦 Archivados (${archived.length})` }].map(t => (
+                <button key={t.key} onClick={() => { setView(t.key); setSearch(''); setSelectedArchived([]); }} style={{ background: view === t.key ? COLORS.accent : COLORS.card, color: view === t.key ? '#0f0f1a' : COLORS.muted, border: 'none', padding: '8px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', fontSize: 13 }}>{t.label}</button>
+              ))}
+            </div>
+
+            {view === 'pending' && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                {[
+                  { key: 'all', label: `🔀 Todos (${pending.length})` },
+                  { key: 'slack', label: `💬 Slack (${slackCount})` },
+                  { key: 'clickup', label: `✅ ClickUp (${clickupCount})` }
+                ].map(t => (
+                  <button key={t.key} onClick={() => setSourceTab(t.key)} style={{ background: sourceTab === t.key ? '#2d0a3e' : COLORS.card, color: sourceTab === t.key ? COLORS.purple : COLORS.muted, border: `1px solid ${sourceTab === t.key ? COLORS.purple : COLORS.border}`, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>{t.label}</button>
+                ))}
+              </div>
+            )}
+
+            <div style={{ marginBottom: 16, position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: COLORS.muted, fontSize: 14 }}>🔍</span>
+              <input type="text" placeholder="Buscar por canal, mensaje o palabra clave..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%', padding: '10px 12px 10px 36px', background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+              {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: COLORS.muted, cursor: 'pointer', fontSize: 16 }}>✕</button>}
+            </div>
+
+            {view === 'pending' && (
+              filteredPending.length === 0 ? (
+                <div style={{ background: COLORS.card, borderRadius: 12, padding: 40, textAlign: 'center' }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
+                  <div style={{ color: COLORS.muted }}>{search ? 'No hay resultados para tu búsqueda' : 'Todo al día — no hay menciones pendientes'}</div>
+                </div>
+              ) : (
+                filteredPending.map((item, i) => <MentionCard key={i} item={item} onArchive={handleArchive} onDelete={handleDelete} />)
+              )
+            )}
+
+            {view === 'archived' && (
+              <>
+                {selectedArchived.length > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#2a0a0a', border: `1px solid #4a1a1a`, borderRadius: 8, padding: '10px 16px', marginBottom: 12 }}>
+                    <span style={{ color: COLORS.red, fontSize: 13 }}>{selectedArchived.length} seleccionado(s)</span>
+                    <button onClick={handleDeleteArchived} style={{ background: COLORS.red, color: '#fff', border: 'none', padding: '6px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', fontSize: 13 }}>🗑️ Eliminar seleccionados</button>
+                  </div>
+                )}
+                {filteredArchived.length === 0 ? (
+                  <div style={{ background: COLORS.card, borderRadius: 12, padding: 40, textAlign: 'center' }}>
+                    <div style={{ fontSize: 40, marginBottom: 12 }}>📦</div>
+                    <div style={{ color: COLORS.muted }}>{search ? 'No hay resultados para tu búsqueda' : 'No hay items archivados aún'}</div>
+                  </div>
+                ) : (
+                  filteredArchived.map((item, i) => (
+                    <div key={i} style={{ background: selectedArchived.includes(item.id) ? '#1a1a3a' : COLORS.card, border: `1px solid ${selectedArchived.includes(item.id) ? COLORS.accent : COLORS.border}`, borderRadius: 10, padding: 14, marginBottom: 8, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                      <input type="checkbox" checked={selectedArchived.includes(item.id)} onChange={() => toggleSelectArchived(item.id)} style={{ marginTop: 4, cursor: 'pointer', width: 16, height: 16, flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <span style={{ color: COLORS.accent, fontWeight: 'bold', fontSize: 13 }}>{item.channel}</span>
+                            <span style={{ color: COLORS.muted, fontSize: 11 }}>Gestionado: {new Date(item.archived_at).toLocaleDateString('es-CO')}</span>
+                          </div>
+                          <a href={item.link} target="_blank" rel="noreferrer" style={{ color: COLORS.accent, fontSize: 12, textDecoration: 'none' }}>🔗 Ver mensaje</a>
+                        </div>
+                        <p style={{ color: '#aaaaaa', fontSize: 12, margin: 0, lineHeight: 1.4 }}>{item.message?.substring(0, 200)}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </>
+            )}
+          </div>
+
+          <div style={{ width: 260, flexShrink: 0 }}>
+            <div style={{ background: COLORS.card, borderRadius: 12, padding: 16 }}>
+              <div style={{ color: COLORS.muted, fontSize: 12, fontWeight: 'bold', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>🏆 Top Canales</div>
+              {topCanales.map((c, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${COLORS.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: COLORS.muted, fontSize: 12, width: 20 }}>#{i + 1}</span>
+                    <span style={{ color: COLORS.text, fontSize: 12 }}>{c.nombre.length > 18 ? c.nombre.substring(0, 18) + '...' : c.nombre}</span>
+                  </div>
+                  <span style={{ color: COLORS.accent, fontSize: 12, fontWeight: 'bold' }}>{c.total}</span>
+                </div>
+              ))}
+              {topCanales.length === 0 && <div style={{ color: COLORS.muted, fontSize: 13 }}>Sin datos aún</div>}
+            </div>
+            <div style={{ background: '#111122', borderRadius: 12, padding: 14, marginTop: 12 }}>
+              <div style={{ color: '#666688', fontSize: 12, lineHeight: 1.5 }}>💡 Los canales del top 3 representan tu mayor carga — úsalo en tus reuniones de SLA.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
