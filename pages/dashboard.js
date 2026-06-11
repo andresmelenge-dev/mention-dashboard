@@ -179,7 +179,7 @@ export default function Dashboard() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {lastUpdate && <span style={{ color: COLORS.muted, fontSize: 12 }}>Actualizado: {lastUpdate.toLocaleTimeString('es-CO')}</span>}
           <button onClick={() => setShowConfig(!showConfig)} style={{ background: COLORS.card, color: COLORS.muted, border: `1px solid ${COLORS.border}`, padding: '8px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>⚙️ Config</button>
-          <button onClick={fetchData} style={{ background: COLORS.accent, color: '#0f0f1a', border: 'none', padding: '8px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', fontSize: 13 }}>🔄 Actualizar</button>
+          onClick={() => { setLoading(true); fetchData(); }} style={{ background: COLORS.accent, color: '#0f0f1a', border: 'none', padding: '8px 16px', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', fontSize: 13 }}>🔄 Actualizar</button>
         </div>
       </div>
 
